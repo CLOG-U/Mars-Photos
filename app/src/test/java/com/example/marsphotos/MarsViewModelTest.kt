@@ -1,7 +1,7 @@
 package com.example.marsphotos
 
 import com.example.marsphotos.model.MarsPhoto
-import com.example.marsphotos.network.MarsApiService
+import com.example.marsphotos.data.MarsPhotosRepository
 import com.example.marsphotos.ui.screens.MarsUiState
 import com.example.marsphotos.ui.screens.MarsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -23,8 +23,8 @@ class MarsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     @Before fun prepare() = Dispatchers.setMain(dispatcher)
     @After fun finish() = Dispatchers.resetMain()
-    private fun service(block: suspend () -> List<MarsPhoto>) = object : MarsApiService {
-        override suspend fun getPhotos() = block()
+    private fun service(block: suspend () -> List<MarsPhoto>) = object : MarsPhotosRepository {
+        override suspend fun getMarsPhotos() = block()
     }
     @Test fun parsesImageSource() {
         val photo = Json.decodeFromString<MarsPhoto>(
@@ -32,11 +32,11 @@ class MarsViewModelTest {
         )
         assertEquals("https://example.com/mars.jpg", photo.imgSrc)
     }
-    @Test fun retrievesCountFromService() = runTest(dispatcher) {
+    @Test fun retrievesPhotosFromRepository() = runTest(dispatcher) {
         val vm = MarsViewModel(service { listOf(MarsPhoto("1", "https://example.com/1"), MarsPhoto("2", "https://example.com/2")) })
         assertEquals(MarsUiState.Loading, vm.marsUiState)
         advanceUntilIdle()
-        assertEquals(MarsUiState.Success("Success: 2 Mars photos retrieved"), vm.marsUiState)
+        assertEquals(MarsUiState.Success(listOf(MarsPhoto("1", "https://example.com/1"), MarsPhoto("2", "https://example.com/2"))), vm.marsUiState)
     }
     @Test fun showsErrorWithoutNetworkThenRetries() = runTest(dispatcher) {
         var offline = true
@@ -49,7 +49,7 @@ class MarsViewModelTest {
         offline = false
         vm.getMarsPhotos()
         advanceUntilIdle()
-        assertEquals(MarsUiState.Success("Success: 1 Mars photos retrieved"), vm.marsUiState)
+        assertEquals(MarsUiState.Success(listOf(MarsPhoto("1", "https://example.com/1"))), vm.marsUiState)
     }
     @Test fun showsErrorForHttpFailure() = runTest(dispatcher) {
         val vm = MarsViewModel(service { throw HttpException(Response.error<Any>(503, "Unavailable".toResponseBody())) })
